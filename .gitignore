@@ -1,0 +1,21 @@
+volumes/
+laravel-backend/
+
+# Environment files (keep .env.example)
+.env
+.env.local
+.env.*.local
+*.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude
+.claude/
