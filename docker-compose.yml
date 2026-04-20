@@ -1,17 +1,17 @@
 services:
-  # Angular Frontend (production build served by Nginx)
+  # React Frontend (production build served by Nginx)
   frontend:
     build:
-      context: ../frontend
+      context: ../react
       dockerfile: ../docker/frontend.Dockerfile
-    container_name: chatgpt_frontend
+    container_name: potatoai_frontend
     restart: unless-stopped
     ports:
       - "4200:80"
     volumes:
       - ./nginx/frontend.conf:/etc/nginx/conf.d/default.conf
     networks:
-      - chatgpt_network
+      - potatoai_network
 
   # PHP 8.4 + Laravel Application
   app:
@@ -20,7 +20,7 @@ services:
       dockerfile: Dockerfile
       args:
         PHP_VERSION: 8.4
-    container_name: chatgpt_app
+    container_name: potatoai_app
     restart: unless-stopped
     working_dir: /var/www/backend
     volumes:
@@ -31,7 +31,7 @@ services:
       - PHP_MAX_EXECUTION_TIME=300
       - COMPOSER_MEMORY_LIMIT=-1
     networks:
-      - chatgpt_network
+      - potatoai_network
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,7 +43,7 @@ services:
   # Nginx Web Server (Laravel backend)
   nginx:
     image: nginx:alpine
-    container_name: chatgpt_nginx
+    container_name: potatoai_nginx
     restart: unless-stopped
     ports:
       - "8000:80"
@@ -51,26 +51,26 @@ services:
       - ../backend:/var/www/backend
       - ./nginx/backend.conf:/etc/nginx/conf.d/default.conf
     networks:
-      - chatgpt_network
+      - potatoai_network
     depends_on:
       - app
 
   # PostgreSQL 16
   postgres:
     image: postgres:16-alpine
-    container_name: chatgpt_postgres
+    container_name: potatoai_postgres
     restart: unless-stopped
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-chatgpt_db}
+      POSTGRES_DB: ${POSTGRES_DB:-potatoai_db}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - chatgpt_network
+      - potatoai_network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
@@ -80,17 +80,17 @@ services:
   # MongoDB 7
   mongodb:
     image: mongo:7
-    container_name: chatgpt_mongodb
+    container_name: potatoai_mongodb
     restart: unless-stopped
     ports:
       - "27017:27017"
     environment:
-      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE:-chatgpt_db}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE:-potatoai_db}
     volumes:
       - mongodb_data:/data/db
       - mongodb_config:/data/configdb
     networks:
-      - chatgpt_network
+      - potatoai_network
     healthcheck:
       test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
       interval: 10s
@@ -100,14 +100,14 @@ services:
   # Redis 7 (Queue, Cache, Sessions)
   redis:
     image: redis:7-alpine
-    container_name: chatgpt_redis
+    container_name: potatoai_redis
     restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
-      - chatgpt_network
+      - potatoai_network
     command: redis-server --appendonly yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -122,14 +122,14 @@ services:
       dockerfile: Dockerfile
       args:
         PHP_VERSION: 8.4
-    container_name: chatgpt_queue
+    container_name: potatoai_queue
     restart: unless-stopped
     working_dir: /var/www/backend
     volumes:
       - ../backend:/var/www/backend
       - vendor_data:/var/www/backend/vendor
     networks:
-      - chatgpt_network
+      - potatoai_network
     depends_on:
       - app
       - redis
@@ -142,14 +142,14 @@ services:
       dockerfile: Dockerfile
       args:
         PHP_VERSION: 8.4
-    container_name: chatgpt_scheduler
+    container_name: potatoai_scheduler
     restart: unless-stopped
     working_dir: /var/www/backend
     volumes:
       - ../backend:/var/www/backend
       - vendor_data:/var/www/backend/vendor
     networks:
-      - chatgpt_network
+      - potatoai_network
     depends_on:
       - app
     command: >
@@ -165,7 +165,7 @@ services:
       dockerfile: Dockerfile
       args:
         PHP_VERSION: 8.4
-    container_name: chatgpt_websockets
+    container_name: potatoai_websockets
     restart: unless-stopped
     working_dir: /var/www/backend
     ports:
@@ -174,7 +174,7 @@ services:
       - ../backend:/var/www/backend
       - vendor_data:/var/www/backend/vendor
     networks:
-      - chatgpt_network
+      - potatoai_network
     depends_on:
       - app
       - redis
@@ -183,18 +183,18 @@ services:
   # Mailhog (Email Testing)
   mailhog:
     image: mailhog/mailhog:latest
-    container_name: chatgpt_mailhog
+    container_name: potatoai_mailhog
     restart: unless-stopped
     ports:
       - "1025:1025"
       - "8025:8025"
     networks:
-      - chatgpt_network
+      - potatoai_network
 
   # pgAdmin 4 (PostgreSQL Web UI)
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: chatgpt_pgadmin
+    container_name: potatoai_pgadmin
     restart: unless-stopped
     ports:
       - "8080:80"
@@ -205,14 +205,14 @@ services:
     volumes:
       - ./volumes/pgadmin:/var/lib/pgadmin
     networks:
-      - chatgpt_network
+      - potatoai_network
     depends_on:
       - postgres
 
   # Mongo Express (MongoDB Web UI)
   mongo-express:
     image: mongo-express:latest
-    container_name: chatgpt_mongo_express
+    container_name: potatoai_mongo_express
     restart: unless-stopped
     ports:
       - "8081:8081"
@@ -221,12 +221,12 @@ services:
       ME_CONFIG_BASICAUTH_USERNAME: ${ME_CONFIG_BASICAUTH_USERNAME:-admin}
       ME_CONFIG_BASICAUTH_PASSWORD: ${ME_CONFIG_BASICAUTH_PASSWORD:-admin}
     networks:
-      - chatgpt_network
+      - potatoai_network
     depends_on:
       - mongodb
 
 networks:
-  chatgpt_network:
+  potatoai_network:
     driver: bridge
 
 volumes:

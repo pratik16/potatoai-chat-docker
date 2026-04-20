@@ -3,6 +3,7 @@ laravel-backend/
 
 # Environment files (keep .env.example)
 .env
+.env.production
 .env.local
 .env.*.local
 *.env

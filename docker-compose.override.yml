@@ -1,0 +1,23 @@
+# Local development overrides — NOT deployed to production.
+# Docker Compose picks this up automatically alongside docker-compose.yml.
+services:
+  app:
+    volumes:
+      - ${USERPROFILE}/.aws:/home/laravel/.aws:ro
+    environment:
+      - AWS_PROFILE=potatoaichat
+      - AWS_SHARED_CREDENTIALS_FILE=/home/laravel/.aws/credentials
+
+  queue:
+    volumes:
+      - ${USERPROFILE}/.aws:/home/laravel/.aws:ro
+    environment:
+      - AWS_PROFILE=potatoaichat
+      - AWS_SHARED_CREDENTIALS_FILE=/home/laravel/.aws/credentials
+
+  scheduler:
+    volumes:
+      - ${USERPROFILE}/.aws:/home/laravel/.aws:ro
+    environment:
+      - AWS_PROFILE=potatoaichat
+      - AWS_SHARED_CREDENTIALS_FILE=/home/laravel/.aws/credentials

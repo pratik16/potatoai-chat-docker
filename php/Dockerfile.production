@@ -1,0 +1,60 @@
+ARG PHP_VERSION=8.4
+FROM php:${PHP_VERSION}-fpm
+
+WORKDIR /var/www/backend
+
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    libzip-dev \
+    zip \
+    unzip \
+    libpq-dev \
+    libssl-dev \
+    pkg-config \
+    libcurl4-openssl-dev \
+    libfreetype6-dev \
+    libjpeg62-turbo-dev \
+    libicu-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install \
+    pdo \
+    pdo_pgsql \
+    pgsql \
+    mbstring \
+    exif \
+    pcntl \
+    bcmath \
+    gd \
+    zip \
+    intl \
+    sockets \
+    opcache
+
+RUN pecl install mongodb redis \
+    && docker-php-ext-enable mongodb redis
+
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+COPY docker/php/php.production.ini /usr/local/etc/php/conf.d/production.ini
+
+COPY backend/composer.json backend/composer.lock ./
+RUN composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader --no-scripts
+
+COPY backend/ ./
+RUN mkdir -p storage/app storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache \
+    && composer dump-autoload --optimize --no-dev \
+    && chown -R www-data:www-data storage bootstrap/cache
+
+COPY docker/php/entrypoint.production.sh /usr/local/bin/potatoai-entrypoint
+RUN chmod +x /usr/local/bin/potatoai-entrypoint
+
+EXPOSE 9000
+
+ENTRYPOINT ["potatoai-entrypoint"]
+CMD ["php-fpm"]
