@@ -16,12 +16,11 @@ services:
       - frontend
 
   frontend:
-    build:
-      context: ../react
-      dockerfile: ../docker/frontend.Dockerfile
+    image: nginx:alpine
     container_name: potatoai_frontend
     restart: unless-stopped
     volumes:
+      - ../frontend-dist:/usr/share/nginx/html:ro
       - ./nginx/frontend.prod.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - potatoai_network
