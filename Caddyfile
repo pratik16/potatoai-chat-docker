@@ -1,4 +1,8 @@
-potatoaihub.com, www.potatoaihub.com {
+potatoaihub.com {
+    redir https://www.potatoaihub.com{uri} permanent
+}
+
+www.potatoaihub.com {
     encode gzip zstd
     reverse_proxy frontend:80
 }
