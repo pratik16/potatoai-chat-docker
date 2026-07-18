@@ -4,5 +4,9 @@ potatoaihub.com {
 
 www.potatoaihub.com {
     encode gzip zstd
+    # Multipart chat uploads: up to 5 × 10MB attachments (~50MB). Match nginx/PHP 64M.
+    request_body {
+        max_size 64MB
+    }
     reverse_proxy frontend:80
 }
