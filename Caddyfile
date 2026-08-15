@@ -8,5 +8,12 @@ www.potatoaihub.com {
     request_body {
         max_size 64MB
     }
-    reverse_proxy frontend:80
+    reverse_proxy frontend:80 {
+        # Overwrite (never append to) a client-supplied X-Forwarded-For. Downstream
+        # nginx appends its own hops, so the leftmost entry stays the real client as
+        # seen by Caddy. AdminIpMiddleware trusts that leftmost hop, and admin routes
+        # carry no user token — appending here would let anyone forge the header and
+        # walk into the admin panel.
+        header_up X-Forwarded-For {http.request.remote.host}
+    }
 }
