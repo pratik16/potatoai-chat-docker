@@ -21,6 +21,55 @@ docker compose --env-file .env.production -f docker-compose.prod.yml exec -T app
 docker compose --env-file .env.production -f docker-compose.prod.yml exec -T app php artisan route:cache
 ```
 
+> `db:seed` above belongs to **first bring-up only**. Do not run it against a populated
+> production database.
+
+## Admin control panel (Filament) — `cpanel.potatoaihub.com`
+
+Requires a DNS **A record** for `cpanel` pointing at the same IP as the apex, in place *before*
+recreating `edge` — otherwise Caddy's ACME challenge fails and backs off.
+
+`.env.production` needs these (names only; see `.env.production.example`):
+`ADMIN_PANEL_DOMAIN=cpanel.potatoaihub.com`, `SESSION_SECURE_COOKIE=true`, and
+`ADMIN_PANEL_IP_GATE` left **unset/false** on first deploy. Leave `SESSION_DOMAIN` unset so the
+panel cookie stays scoped to `cpanel` and is never shared with `www`.
+
+```bash
+cd ~/potatoaihub/docker
+git pull origin master
+COMPOSE="docker compose --env-file .env.production -f docker-compose.prod.yml"
+
+# Backend code + committed Filament assets. backend-nginx serves backend/public
+# from the host checkout, so this pull is what publishes the panel's CSS/JS.
+cd ~/potatoaihub/backend && git pull origin master && cd ~/potatoaihub/docker
+
+$COMPOSE up -d --build app queue scheduler
+$COMPOSE up -d --force-recreate backend-nginx edge
+
+$COMPOSE exec -T app php artisan migrate --force
+
+# Caches. filament:optimize = filament:cache-components + icons:cache.
+$COMPOSE exec -T app php artisan optimize
+$COMPOSE exec -T app php artisan filament:optimize
+
+# First administrator. Use -it (not -T) so the password prompt is interactive
+# and never lands in shell history.
+$COMPOSE exec -it app php artisan admin:create you@example.com --role=super_admin
+```
+
+Verify:
+
+```bash
+curl -I https://cpanel.potatoaihub.com/livewire/livewire.js   # must be 200, not 404
+curl -I https://cpanel.potatoaihub.com/admin/login            # 200
+curl -I https://www.potatoaihub.com/                          # still the React SPA
+```
+
+**`ADMIN_PANEL_DOMAIN` is baked in by `route:cache`.** Changing it later needs
+`$COMPOSE exec -T app php artisan route:clear && … route:cache`.
+
+Before any redeploy: `$COMPOSE exec -T app php artisan filament:optimize-clear && … optimize:clear`.
+
 ## Frontend-Only Deployment
 
 The React app should be built outside the production runtime and copied to:
