@@ -24,6 +24,31 @@ docker compose --env-file .env.production -f docker-compose.prod.yml exec -T app
 > `db:seed` above belongs to **first bring-up only**. Do not run it against a populated
 > production database.
 
+### Any deploy that adds a Composer package: run `package:discover`
+
+`bootstrap/cache` is a **persisted named volume** (`backend_cache`), and
+`Dockerfile.production` installs with `--no-scripts`. So `bootstrap/cache/packages.php` — the
+auto-discovery manifest — survives the rebuild holding the *previous* deploy's package list, and
+nothing in the image build regenerates it.
+
+The new package's service provider is then never registered. Its routes simply do not exist, and
+`php artisan optimize` caches that incomplete route table, cementing the failure. The symptom is a
+**404 with `x-powered-by: PHP` present** — Laravel answering, not nginx.
+
+`optimize` does **not** run `package:discover`. Run it explicitly, in this order:
+
+```bash
+$COMPOSE exec -T app php artisan optimize:clear
+$COMPOSE exec -T app php artisan package:discover --ansi
+$COMPOSE exec -T app php artisan optimize
+```
+
+Confirm the manifest actually picked the package up:
+
+```bash
+$COMPOSE exec -T app sh -c 'grep -c -i filament bootstrap/cache/packages.php'   # must be > 0
+```
+
 ## Admin control panel (Filament) — `cpanel.potatoaihub.com`
 
 Requires a DNS **A record** for `cpanel` pointing at the same IP as the apex, in place *before*
@@ -48,7 +73,11 @@ $COMPOSE up -d --force-recreate backend-nginx edge
 
 $COMPOSE exec -T app php artisan migrate --force
 
-# Caches. filament:optimize = filament:cache-components + icons:cache.
+# Caches. package:discover is REQUIRED here — bootstrap/cache is a persisted
+# volume, so the stale manifest would otherwise hide Filament and Livewire
+# entirely and every panel URL would 404. See the section above.
+$COMPOSE exec -T app php artisan optimize:clear
+$COMPOSE exec -T app php artisan package:discover --ansi
 $COMPOSE exec -T app php artisan optimize
 $COMPOSE exec -T app php artisan filament:optimize
 
