@@ -14,6 +14,8 @@ services:
       - potatoai_network
     depends_on:
       - frontend
+      # cpanel.potatoaihub.com proxies here directly, bypassing `frontend`.
+      - backend-nginx
 
   frontend:
     image: nginx:alpine

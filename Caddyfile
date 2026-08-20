@@ -2,6 +2,33 @@ potatoaihub.com {
     redir https://www.potatoaihub.com{uri} permanent
 }
 
+# Admin control panel (Filament). Proxies straight to the Laravel nginx, bypassing
+# the React SPA container entirely — so there is no collision with the SPA's own
+# /admin path and no chance of the panel leaking onto the customer host.
+cpanel.potatoaihub.com {
+    encode gzip zstd
+
+    # Filament file uploads. Match the www block, nginx and PHP (64M).
+    request_body {
+        max_size 64MB
+    }
+
+    # Nothing in Filament calls /api. Keeping the customer API off the admin
+    # hostname removes it as an attack surface here.
+    handle /api/* {
+        respond 404
+    }
+
+    handle {
+        reverse_proxy backend-nginx:80 {
+            # Overwrite (never append to) a client-supplied X-Forwarded-For, for the
+            # same reason as the www block: the optional admin IP gate and every
+            # admin_audit_log row read the leftmost hop as the real client.
+            header_up X-Forwarded-For {http.request.remote.host}
+        }
+    }
+}
+
 www.potatoaihub.com {
     encode gzip zstd
     # Multipart chat uploads: up to 5 × 10MB attachments (~50MB). Match nginx/PHP 64M.

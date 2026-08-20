@@ -20,3 +20,10 @@ Thumbs.db
 
 # Claude
 .claude/
+.playwright-mcp/
+
+# Provisioning scratch. setup_aws/ has held downloaded IAM access-key CSVs, so
+# leaving it unignored means a bulk `git add -A` commits live credentials.
+setup_aws/
+setup_oracle/
+docker-compose.local-db.yml
