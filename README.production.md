@@ -99,16 +99,19 @@ done
 
 Rollback: `git checkout <prev-sha> -- docker-compose.prod.yml php/php.production.ini && $C up -d app queue scheduler websockets`.
 
-## Persistent data — still named volumes (migration NOT yet applied)
+## Persistent data — host paths under `~/potatoaihub/data/`
 
-`postgres_data`, `mongodb_data`, `mongodb_config`, `redis_data`, `caddy_data`, `caddy_config`,
-`backend_storage`, `backend_cache` are Docker named volumes. They *are* on disk — at
-`/var/lib/docker/volumes/docker_<name>/_data` — just not anywhere convenient to back up or grep.
+**Migrated 2026-08-26** (docker `3f15654`). Every persistent volume is now a bind mount; the
+compose file declares no named volumes at all. Downtime for the migration was **1m45s**
+(10:09:16 → 10:11:02) and all data verified intact afterwards.
 
-The planned move to `~/potatoaihub/data/` is written up below. **It needs a maintenance window and
-must not be half-applied:** if the compose change reaches the server before the copy, Postgres
-starts on an empty directory and initialises a **brand-new empty database**, and Caddy re-issues
-certificates from Let's Encrypt.
+The eight old `docker_*` named volumes were left in place as the rollback path. Delete them only
+once you are confident: `docker volume rm docker_postgres_data …`.
+
+The procedure below is kept because it is the recipe for rebuilding this box, and because the
+hazard it guards against is permanent: **this must never be half-applied.** If the compose file
+reaches a server whose `data/` is empty, Postgres initialises a **brand-new empty database** and
+Caddy re-issues certificates from Let's Encrypt.
 
 Target layout, and the mount each directory replaces:
 
@@ -176,9 +179,35 @@ The copy only *reads* the named volumes, so rollback is `$C down`, revert
 `docker-compose.prod.yml`, `$C up -d`. Keep the old volumes for at least a week before
 `docker volume rm`.
 
-Afterwards `~/potatoaihub/data/backend/storage/logs/laravel-<date>.log` is readable straight from
-the host — no `docker exec` — and a full backup becomes
-`tar -czf backup-$(date +%F).tgz -C ~/potatoaihub data`.
+### Reading and backing up `data/`
+
+Laravel logs **are** readable as `ubuntu` — the entrypoint chowns them to `www-data` with mode 644,
+so `docker exec` is no longer needed just to read a log:
+
+```bash
+grep ERROR ~/potatoaihub/data/backend/storage/logs/laravel-$(date -u +%F).log
+```
+
+The database directories are **not**: they keep the container's own ownership and permissions
+(`postgres/pgdata` is mode 700 uid 70; Caddy's `certificates`, Mongo's `journal` and Redis's
+`appendonlydir` are root-only). So anything that walks the whole tree needs `sudo` — a plain
+`du -sh ~/potatoaihub/data` silently reports ~3.8M instead of ~600M because it cannot descend.
+
+A full backup therefore needs `sudo`, and the stack should be down (or the databases quiesced) for
+a file-level copy to be consistent:
+
+```bash
+sudo tar -czf ~/backup-$(date +%F).tgz -C ~/potatoaihub data
+```
+
+For a hot backup, prefer logical dumps — they need no `sudo` and no downtime:
+
+```bash
+docker exec potatoai_postgres pg_dumpall -U potatoai > ~/pg-$(date +%F).sql
+docker exec potatoai_mongodb mongodump --quiet --archive=/tmp/m.gz --gzip && \
+  docker cp potatoai_mongodb:/tmp/m.gz ~/mongo-$(date +%F).archive.gz && \
+  docker exec potatoai_mongodb rm -f /tmp/m.gz
+```
 
 ## EC2 Commands
 
