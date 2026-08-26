@@ -8,8 +8,10 @@ services:
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+      # TLS certificates live in /data. If this directory is ever empty on startup,
+      # Caddy re-issues from Let's Encrypt and can hit their rate limit.
+      - ${DATA_PATH:-../data}/caddy/data:/data
+      - ${DATA_PATH:-../data}/caddy/config:/config
     networks:
       - potatoai_network
     depends_on:
@@ -52,8 +54,8 @@ services:
       - ${BACKEND_PATH:-../backend}:/var/www/backend
       # These shadow the mount above (Docker resolves by path depth, deepest wins), so
       # storage and bootstrap/cache stay off the host checkout and out of git.
-      - backend_storage:/var/www/backend/storage
-      - backend_cache:/var/www/backend/bootstrap/cache
+      - ${DATA_PATH:-../data}/backend/storage:/var/www/backend/storage
+      - ${DATA_PATH:-../data}/backend/bootstrap-cache:/var/www/backend/bootstrap/cache
       # Mounted, not only baked into the image, so an ini tweak needs a recreate — never a rebuild.
       - ./php/php.production.ini:/usr/local/etc/php/conf.d/production.ini:ro
     networks:
@@ -90,7 +92,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # PGDATA is the pgdata/ subdirectory, so an empty mount here makes Postgres
+      # initialise a BRAND NEW EMPTY DATABASE. Never start this without the copy.
+      - ${DATA_PATH:-../data}/postgres:/var/lib/postgresql/data
     networks:
       - potatoai_network
     healthcheck:
@@ -106,8 +110,8 @@ services:
     environment:
       MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE:-potatoai_db}
     volumes:
-      - mongodb_data:/data/db
-      - mongodb_config:/data/configdb
+      - ${DATA_PATH:-../data}/mongodb/db:/data/db
+      - ${DATA_PATH:-../data}/mongodb/configdb:/data/configdb
     networks:
       - potatoai_network
     healthcheck:
@@ -122,7 +126,7 @@ services:
     restart: unless-stopped
     command: redis-server --appendonly yes
     volumes:
-      - redis_data:/data
+      - ${DATA_PATH:-../data}/redis:/data
     networks:
       - potatoai_network
     healthcheck:
@@ -146,8 +150,8 @@ services:
       # Must match `app`. Without the code mount this would silently run the stale
       # baked-in copy while app served the new one.
       - ${BACKEND_PATH:-../backend}:/var/www/backend
-      - backend_storage:/var/www/backend/storage
-      - backend_cache:/var/www/backend/bootstrap/cache
+      - ${DATA_PATH:-../data}/backend/storage:/var/www/backend/storage
+      - ${DATA_PATH:-../data}/backend/bootstrap-cache:/var/www/backend/bootstrap/cache
       - ./php/php.production.ini:/usr/local/etc/php/conf.d/production.ini:ro
     # A long-lived PHP process: it holds code in memory regardless of opcache, so a
     # deploy has to `php artisan queue:restart`. The worker then exits and
@@ -174,8 +178,8 @@ services:
       - .env.production
     volumes:
       - ${BACKEND_PATH:-../backend}:/var/www/backend
-      - backend_storage:/var/www/backend/storage
-      - backend_cache:/var/www/backend/bootstrap/cache
+      - ${DATA_PATH:-../data}/backend/storage:/var/www/backend/storage
+      - ${DATA_PATH:-../data}/backend/bootstrap-cache:/var/www/backend/bootstrap/cache
       - ./php/php.production.ini:/usr/local/etc/php/conf.d/production.ini:ro
     # Unlike queue/websockets this needs no restart on deploy: every iteration spawns
     # a fresh `schedule:run` process, which picks up the mounted code by itself.
@@ -199,8 +203,8 @@ services:
       - .env.production
     volumes:
       - ${BACKEND_PATH:-../backend}:/var/www/backend
-      - backend_storage:/var/www/backend/storage
-      - backend_cache:/var/www/backend/bootstrap/cache
+      - ${DATA_PATH:-../data}/backend/storage:/var/www/backend/storage
+      - ${DATA_PATH:-../data}/backend/bootstrap-cache:/var/www/backend/bootstrap/cache
       - ./php/php.production.ini:/usr/local/etc/php/conf.d/production.ini:ro
     # Reverb has no graceful reload, so a code change needs `up -d --force-recreate websockets`.
     command: php artisan reverb:start --host=0.0.0.0 --port=6001 --no-interaction
@@ -216,12 +220,3 @@ networks:
   potatoai_network:
     driver: bridge
 
-volumes:
-  caddy_data:
-  caddy_config:
-  postgres_data:
-  mongodb_data:
-  mongodb_config:
-  redis_data:
-  backend_storage:
-  backend_cache:
