@@ -57,7 +57,11 @@ image only when `php/Dockerfile.production` or `docker-compose.prod.yml` moved, 
 
 ### One-time cutover — order is load-bearing
 
-Not yet applied on the server. Do it in this order; reversing it takes production down.
+**Applied 2026-08-26** (backend `c929928`, docker `999272a`). Measured across a 1s probe of `/up`
+spanning the recreate: **141/141 requests returned 200 — zero failed requests.** Kept here because
+the ordering rule still applies to any rebuild of this box, and to a rollback.
+
+Do it in this order; reversing it takes production down.
 
 1. **Push the backend repo first** (workflow only). Against the *old* compose this deploy changes
    nothing that matters: `up -d` is a no-op, and its `composer install` step writes into the
@@ -129,11 +133,15 @@ cd ~/potatoaihub/docker
 C="docker compose --env-file .env.production -f docker-compose.prod.yml"
 D=~/potatoaihub/data
 
-# Pre-flight, days earlier: sizes decide the window length, and you need ~2x free.
-docker volume ls | grep -E 'postgres|mongodb|redis|caddy|backend'   # confirm the docker_ prefix
-sudo du -sh /var/lib/docker/volumes/docker_*/_data
-df -h /
-$C exec -T app php artisan tinker --execute='echo App\Models\User::count();' < /dev/null  # record it
+# Pre-flight — measured 2026-08-26, re-check before the window:
+#   volume prefix : docker_   (all eight names confirmed)
+#   sizes         : mongodb_data 511M, postgres_data 64M, redis_data 14.5M,
+#                   backend_storage 2.5M, backend_cache 380K, caddy_* 152K  => 593M total
+#   free disk     : 62G of 77G
+#   baseline      : users 12, credit_ledger 62, chats 21, messages 64, redis dbsize 1
+# At 593M the copy is seconds; the window is dominated by container stop/start (~2 min).
+# `sudo du` needs a password on this box — measure through a container instead:
+#   docker run --rm -v docker_<vol>:/v alpine du -sh /v
 
 $C down
 
@@ -252,7 +260,9 @@ $COMPOSE exec -it app php artisan admin:create you@example.com --role=super_admi
 Verify:
 
 ```bash
-curl -I https://cpanel.potatoaihub.com/livewire/livewire.js   # must be 200, not 404
+curl -I https://cpanel.potatoaihub.com/livewire/livewire.min.js  # must be 200, not 404
+#   .min.js, not .js — Livewire only registers the minified route when APP_DEBUG=false,
+#   which is why the panel HTML asks for /livewire/livewire.min.js?id=…
 curl -I https://cpanel.potatoaihub.com/admin/login            # 200
 curl -I https://www.potatoaihub.com/                          # still the React SPA
 ```
